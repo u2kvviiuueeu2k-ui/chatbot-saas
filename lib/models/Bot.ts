@@ -15,6 +15,8 @@ export interface IBot extends Document {
     welcomeMessage: string;
     botName: string;
     showCredit: boolean;
+    monthlyTokenLimit: number;
+    maxScrapePages: number;
   };
   lineConfig: {
     enabled: boolean;
@@ -45,6 +47,8 @@ const BotSchema = new Schema<IBot>(
       welcomeMessage: { type: String, default: 'こんにちは！何でもお気軽にご質問ください。' },
       botName: { type: String, default: 'AI アシスタント' },
       showCredit: { type: Boolean, default: true },
+      monthlyTokenLimit: { type: Number, default: 50000 },
+      maxScrapePages: { type: Number, default: 5 },
     },
     lineConfig: {
       enabled: { type: Boolean, default: false },

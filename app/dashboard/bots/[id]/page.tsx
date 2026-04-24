@@ -12,6 +12,8 @@ interface BotSettings {
   welcomeMessage: string;
   botName: string;
   showCredit: boolean;
+  monthlyTokenLimit: number;
+  maxScrapePages: number;
 }
 
 interface LineConfig {
@@ -30,6 +32,7 @@ interface Bot {
   settings: BotSettings;
   lineConfig: LineConfig;
   scrapedContent: string;
+  monthlyTokensUsed: number;
 }
 
 const FONT_OPTIONS = [
@@ -55,7 +58,11 @@ export default function BotSettingsPage() {
       .then((r) => r.json())
       .then((data) => {
         setBot(data);
-        setSettings(data.settings);
+        setSettings({
+          ...data.settings,
+          monthlyTokenLimit: data.settings.monthlyTokenLimit ?? 50000,
+          maxScrapePages: data.settings.maxScrapePages ?? 5,
+        });
         setLineConfig(data.lineConfig);
       });
   }, [id]);
@@ -94,6 +101,11 @@ export default function BotSettingsPage() {
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
+  const monthlyLimit = settings.monthlyTokenLimit;
+  const monthlyUsed = bot.monthlyTokensUsed ?? 0;
+  const usagePct = monthlyLimit > 0 ? Math.min((monthlyUsed / monthlyLimit) * 100, 100) : 0;
+  const barColor = usagePct >= 100 ? 'bg-red-500' : usagePct >= 80 ? 'bg-yellow-400' : 'bg-indigo-500';
+  const usageTextColor = usagePct >= 100 ? 'text-red-600' : usagePct >= 80 ? 'text-yellow-600' : 'text-gray-600';
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -216,6 +228,58 @@ export default function BotSettingsPage() {
           <label htmlFor="showCredit" className="text-sm text-gray-700">
             「Powered by Spinel Lab」クレジットを表示
           </label>
+        </div>
+      </div>
+
+      {/* Limits */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-5">
+        <h2 className="font-semibold text-gray-900">制限設定</h2>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">月間トークン上限</label>
+            <input
+              type="number"
+              min={1000}
+              max={10000000}
+              step={1000}
+              value={settings.monthlyTokenLimit}
+              onChange={(e) => setSettings({ ...settings, monthlyTokenLimit: Number(e.target.value) })}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+            />
+            <p className="text-xs text-gray-400 mt-1">上限超過時はチャットが停止します</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">最大クロールページ数</label>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={settings.maxScrapePages}
+              onChange={(e) => setSettings({ ...settings, maxScrapePages: Number(e.target.value) })}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+            />
+            <p className="text-xs text-gray-400 mt-1">再取得時に反映されます（1〜20）</p>
+          </div>
+        </div>
+
+        {/* 今月の使用量 */}
+        <div className="pt-1">
+          <div className="flex justify-between text-sm mb-1.5">
+            <span className="font-medium text-gray-700">今月のトークン使用量</span>
+            <span className={`font-medium ${usageTextColor}`}>
+              {monthlyUsed.toLocaleString()} / {monthlyLimit.toLocaleString()}
+              {usagePct >= 100 && ' — 上限到達'}
+              {usagePct >= 80 && usagePct < 100 && ' — 残りわずか'}
+            </span>
+          </div>
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+              style={{ width: `${usagePct}%` }}
+            />
+          </div>
         </div>
       </div>
 

@@ -19,7 +19,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   await Bot.findByIdAndUpdate(params.id, { status: 'pending', scrapeError: '' });
 
   try {
-    const result = await scrapeUrl(bot.url);
+    const maxPages = bot.settings?.maxScrapePages ?? 5;
+    const result = await scrapeUrl(bot.url, maxPages);
     const systemPrompt = buildSystemPrompt(bot.name, result.content);
 
     await Bot.findByIdAndUpdate(params.id, {

@@ -2,17 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { connectDB } from '@/lib/mongodb';
 import { Bot } from '@/lib/models/Bot';
+import { BotUsage } from '@/lib/models/BotUsage';
 import { Conversation } from '@/lib/models/Conversation';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { trackUsage } from '@/lib/cost-monitor';
 import { sendLineNotification } from '@/lib/line';
 
-// ルートセグメント設定: import文の後、関数定義の前に記述
 export const maxDuration = 60;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const MAX_TURNS = 10;
+
+function getCurrentYearMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
 
 function getClientIp(req: NextRequest): string {
   return (
@@ -35,6 +40,26 @@ export async function POST(req: NextRequest, { params }: { params: { botId: stri
 
   const bot = await Bot.findById(params.botId);
   if (!bot) return NextResponse.json({ error: 'Bot not found' }, { status: 404 });
+
+  // 月間トークン上限チェック
+  const yearMonth = getCurrentYearMonth();
+  const monthlyLimit = bot.settings?.monthlyTokenLimit ?? 50000;
+  const botUsage = await BotUsage.findOne({ botId: params.botId, yearMonth });
+  const totalTokensUsed = botUsage ? botUsage.inputTokens + botUsage.outputTokens : 0;
+
+  if (totalTokensUsed >= monthlyLimit) {
+    return NextResponse.json(
+      { error: '今月の利用上限に達しました。来月またお試しください。' },
+      {
+        status: 429,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, X-Session-ID',
+        },
+      }
+    );
+  }
 
   let conversation = await Conversation.findOne({ botId: params.botId, sessionId });
 
@@ -83,6 +108,13 @@ export async function POST(req: NextRequest, { params }: { params: { botId: stri
     const assistantMessage = response.content[0].type === 'text' ? response.content[0].text : '';
     const inputTokens = response.usage.input_tokens;
     const outputTokens = response.usage.output_tokens;
+
+    // ボットごとの月間使用量を記録
+    await BotUsage.findOneAndUpdate(
+      { botId: params.botId, yearMonth },
+      { $inc: { inputTokens, outputTokens } },
+      { upsert: true }
+    );
 
     await Conversation.findByIdAndUpdate(conversation!._id, {
       $push: {

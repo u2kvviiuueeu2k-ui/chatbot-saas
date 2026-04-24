@@ -12,7 +12,6 @@ const EXCLUDED_PATTERNS = [
   '/register',
 ];
 
-const MAX_SUBPAGES = 7;
 const PAGE_TIMEOUT = 12000;
 
 export interface ScrapedPage {
@@ -120,7 +119,7 @@ async function fetchPageWithCheerio(
   }
 }
 
-export async function scrapeUrl(url: string): Promise<ScrapeResult> {
+export async function scrapeUrl(url: string, maxPages = 5): Promise<ScrapeResult> {
   const pages: ScrapedPage[] = [];
   const contents: string[] = [];
 
@@ -140,9 +139,9 @@ export async function scrapeUrl(url: string): Promise<ScrapeResult> {
   pages.push({ title: mainTitle, url });
   contents.push(`## ${mainTitle}\n\n${mainContent.slice(0, 6000)}`);
 
-  // メインページのHTMLから内部リンクを抽出してサブページをクロール
-  if (mainCheerio?.html) {
-    const subLinks = extractInternalLinks(mainCheerio.html, url).slice(0, MAX_SUBPAGES);
+  // メインページのHTMLから内部リンクを抽出し、最大 (maxPages - 1) 件のサブページをクロール
+  if (mainCheerio?.html && maxPages > 1) {
+    const subLinks = extractInternalLinks(mainCheerio.html, url).slice(0, maxPages - 1);
 
     const subResults = await Promise.all(
       subLinks.map(async (subUrl) => {
