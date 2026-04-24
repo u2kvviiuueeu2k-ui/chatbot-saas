@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "app/api/bots/[id]/scrape/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/chat/[botId]/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/webhook/line/[botId]/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
