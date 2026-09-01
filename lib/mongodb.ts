@@ -22,7 +22,10 @@ export async function connectDB() {
   if (cached.conn) return cached.conn;
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI).then((m) => m);
+    // 接続文字列にDB名が含まれていなくても既存データ（chatbot_db）に繋がるよう明示指定する
+    cached.promise = mongoose
+      .connect(MONGODB_URI, { dbName: process.env.MONGODB_DB ?? 'chatbot_db' })
+      .then((m) => m);
   }
 
   cached.conn = await cached.promise;
