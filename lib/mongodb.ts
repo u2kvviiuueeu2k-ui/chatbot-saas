@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI ?? '';
+// Cloudflare Workers では環境変数がリクエスト処理時にしか利用できないため、
+// モジュール読み込み時ではなく呼び出し時に参照する。
 
 interface MongooseCache {
   conn: typeof mongoose | null;
@@ -16,6 +17,7 @@ const cached: MongooseCache = global.mongoose ?? { conn: null, promise: null };
 global.mongoose = cached;
 
 export async function connectDB() {
+  const MONGODB_URI = process.env.MONGODB_URI ?? '';
   if (!MONGODB_URI) throw new Error('MONGODB_URI environment variable is not set');
   if (cached.conn) return cached.conn;
 

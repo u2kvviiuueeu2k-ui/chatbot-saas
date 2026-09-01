@@ -10,7 +10,11 @@ import { sendLineNotification } from '@/lib/line';
 
 export const maxDuration = 60;
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// Cloudflare Workers では環境変数がリクエスト処理時にしか利用できないため、
+// モジュール読み込み時ではなく呼び出し時にクライアントを生成する。
+function getAnthropic() {
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+}
 
 const MAX_TURNS = 10;
 
@@ -98,7 +102,7 @@ export async function POST(req: NextRequest, { params }: { params: { botId: stri
   history.push({ role: 'user', content: message });
 
   try {
-    const response = await anthropic.messages.create({
+    const response = await getAnthropic().messages.create({
       model: 'claude-sonnet-4-5',
       max_tokens: 1024,
       system: bot.systemPrompt,
