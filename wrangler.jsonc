@@ -1,0 +1,11 @@
+{
+  "name": "chatbot-saas",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "ccc605624906c4ea0e7990154c932396",
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  }
+}

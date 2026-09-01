@@ -1,4 +1,3 @@
-import nodemailer from 'nodemailer';
 import { connectDB } from './mongodb';
 import { UsageStats } from './models/UsageStats';
 
@@ -37,24 +36,28 @@ export async function trackUsage(inputTokens: number, outputTokens: number): Pro
 }
 
 async function sendCostAlert(costJpy: number, yearMonth: string): Promise<void> {
-  if (!process.env.SMTP_HOST || !process.env.ALERT_EMAIL) return;
+  // Cloudflare Workers では SMTP（nodemailer）が使えないため Resend の REST API を使用
+  const apiKey = process.env.RESEND_API_KEY;
+  const to = process.env.ALERT_EMAIL;
+  if (!apiKey || !to) return;
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT ?? 587),
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM_EMAIL ?? 'ChatBot SaaS <onboarding@resend.dev>',
+      to,
+      subject: `[ChatBot SaaS] 月間APIコスト警告 - ${yearMonth}`,
+      text: `${yearMonth}の推定APIコストが ¥${Math.round(costJpy).toLocaleString()} に達しました。\n\n閾値: ¥${ALERT_THRESHOLD_JPY.toLocaleString()}\n\n管理画面でご確認ください: ${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
+    }),
   });
 
-  await transporter.sendMail({
-    from: process.env.SMTP_USER,
-    to: process.env.ALERT_EMAIL,
-    subject: `[ChatBot SaaS] 月間APIコスト警告 - ${yearMonth}`,
-    text: `${yearMonth}の推定APIコストが ¥${Math.round(costJpy).toLocaleString()} に達しました。\n\n閾値: ¥${ALERT_THRESHOLD_JPY.toLocaleString()}\n\n管理画面でご確認ください: ${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
-  });
+  if (!res.ok) {
+    console.error('Cost alert email failed:', res.status, await res.text().catch(() => ''));
+  }
 }
 
 export async function getUsageStats(yearMonth?: string) {

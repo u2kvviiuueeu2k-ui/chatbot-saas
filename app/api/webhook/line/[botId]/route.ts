@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: { botId: stri
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  if (!verifyLineSignature(rawBody, signature, bot.lineConfig.channelSecret)) {
+  if (!(await verifyLineSignature(rawBody, signature, bot.lineConfig.channelSecret))) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 

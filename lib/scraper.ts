@@ -1,4 +1,3 @@
-import axios from 'axios';
 import * as cheerio from 'cheerio';
 
 const EXCLUDED_PATTERNS = [
@@ -59,19 +58,38 @@ function extractInternalLinks(html: string, baseUrl: string): string[] {
   return links;
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readCapped(response: Response, maxBytes = 5 * 1024 * 1024): Promise<string> {
+  const buf = await response.arrayBuffer();
+  const sliced = buf.byteLength > maxBytes ? buf.slice(0, maxBytes) : buf;
+  return new TextDecoder().decode(sliced);
+}
+
 async function fetchMainWithJina(url: string): Promise<string | null> {
   try {
     const jinaUrl = `https://r.jina.ai/${url}`;
-    const response = await axios.get(jinaUrl, {
-      timeout: PAGE_TIMEOUT * 2,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; ChatBotSaaS/1.0)',
-        'Accept': 'text/plain, text/markdown',
-        'X-Return-Format': 'markdown',
+    const response = await fetchWithTimeout(
+      jinaUrl,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ChatBotSaaS/1.0)',
+          'Accept': 'text/plain, text/markdown',
+          'X-Return-Format': 'markdown',
+        },
       },
-      maxContentLength: 5 * 1024 * 1024,
-    });
-    const text = String(response.data).trim();
+      PAGE_TIMEOUT * 2
+    );
+    if (!response.ok) return null;
+    const text = (await readCapped(response)).trim();
     return text.length >= 200 ? text : null;
   } catch {
     return null;
@@ -82,16 +100,19 @@ async function fetchPageWithCheerio(
   url: string
 ): Promise<{ title: string; text: string; html: string } | null> {
   try {
-    const response = await axios.get(url, {
-      timeout: PAGE_TIMEOUT,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    const response = await fetchWithTimeout(
+      url,
+      {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
       },
-      maxContentLength: 5 * 1024 * 1024,
-    });
+      PAGE_TIMEOUT
+    );
+    if (!response.ok) return null;
 
-    const html = String(response.data);
+    const html = await readCapped(response);
     const $ = cheerio.load(html);
     $('script, style, noscript, iframe, .cookie-banner, #cookie-banner').remove();
 

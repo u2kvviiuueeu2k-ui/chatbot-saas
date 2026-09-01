@@ -1,8 +1,26 @@
-import axios from 'axios';
-
 interface LineConfig {
   channelAccessToken: string;
   notifyUserId: string;
+}
+
+async function postToLine(
+  endpoint: string,
+  channelAccessToken: string,
+  payload: unknown
+): Promise<void> {
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${channelAccessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`LINE API error ${res.status}: ${detail.slice(0, 300)}`);
+  }
 }
 
 export async function sendLineNotification(
@@ -15,19 +33,10 @@ export async function sendLineNotification(
 
   const text = `📨 ${botName}への問い合わせ\n\n👤 ユーザー:\n${userMessage}\n\n🤖 AI回答:\n${botResponse}`;
 
-  await axios.post(
-    'https://api.line.me/v2/bot/message/push',
-    {
-      to: config.notifyUserId,
-      messages: [{ type: 'text', text: text.slice(0, 5000) }],
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${config.channelAccessToken}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
+  await postToLine('https://api.line.me/v2/bot/message/push', config.channelAccessToken, {
+    to: config.notifyUserId,
+    messages: [{ type: 'text', text: text.slice(0, 5000) }],
+  });
 }
 
 export async function replyToLine(
@@ -35,26 +44,32 @@ export async function replyToLine(
   replyToken: string,
   text: string
 ): Promise<void> {
-  await axios.post(
-    'https://api.line.me/v2/bot/message/reply',
-    {
-      replyToken,
-      messages: [{ type: 'text', text: text.slice(0, 5000) }],
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${channelAccessToken}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
+  await postToLine('https://api.line.me/v2/bot/message/reply', channelAccessToken, {
+    replyToken,
+    messages: [{ type: 'text', text: text.slice(0, 5000) }],
+  });
 }
 
-export function verifyLineSignature(body: string, signature: string, channelSecret: string): boolean {
-  const crypto = require('crypto');
-  const hash = crypto
-    .createHmac('SHA256', channelSecret)
-    .update(body)
-    .digest('base64');
+export async function verifyLineSignature(
+  body: string,
+  signature: string,
+  channelSecret: string
+): Promise<boolean> {
+  // Workers ランタイムで動作させるため node:crypto ではなく WebCrypto を使用
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(channelSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, encoder.encode(body));
+  const bytes = new Uint8Array(mac);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const hash = btoa(binary);
   return hash === signature;
 }
