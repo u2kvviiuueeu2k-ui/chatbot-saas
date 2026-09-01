@@ -13,7 +13,11 @@ export const maxDuration = 60;
 // Cloudflare Workers では環境変数がリクエスト処理時にしか利用できないため、
 // モジュール読み込み時ではなく呼び出し時にクライアントを生成する。
 function getAnthropic() {
-  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  // Workers ランタイムの fetch を明示的に渡す（未指定だとNode流のHTTP接続を試みて失敗する）
+  return new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    fetch: globalThis.fetch.bind(globalThis),
+  });
 }
 
 const MAX_TURNS = 10;
